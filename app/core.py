@@ -9,6 +9,11 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
+# Upgraded pretrained model
+MODEL_NAME = "distilbert/distilgpt2"
+ADAPTER_PATH = "artifacts/distilgpt2_lora_adapter.pt"
+
+
 SPORTS_CORPUS = [
     "The striker moves forward with the ball.",
     "The goalkeeper makes a brilliant save.",
@@ -106,11 +111,15 @@ class LoRAConv1D(nn.Module):
         self.lora_A = nn.Parameter(
             torch.empty(input_size, rank)
         )
+
         self.lora_B = nn.Parameter(
             torch.zeros(rank, output_size)
         )
 
-        nn.init.kaiming_uniform_(self.lora_A, a=5 ** 0.5)
+        nn.init.kaiming_uniform_(
+            self.lora_A,
+            a=5 ** 0.5
+        )
 
         self.dropout = nn.Dropout(dropout)
 
@@ -123,7 +132,9 @@ class LoRAConv1D(nn.Module):
         return original_output + self.scaling * adapter_output
 
 
-def milestone_3(model_name="sshleifer/tiny-gpt2"):
+def milestone_3(model_name=MODEL_NAME):
+    print(f"Loading pretrained model: {model_name}")
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name)
 
@@ -133,8 +144,11 @@ def milestone_3(model_name="sshleifer/tiny-gpt2"):
     for parameter in model.parameters():
         parameter.requires_grad = False
 
+    # Inject LoRA adapters into attention layers
     for block in model.transformer.h:
-        block.attn.c_attn = LoRAConv1D(block.attn.c_attn)
+        block.attn.c_attn = LoRAConv1D(
+            block.attn.c_attn
+        )
 
     model.config.use_cache = False
 
@@ -144,8 +158,13 @@ def milestone_3(model_name="sshleifer/tiny-gpt2"):
     }
 
 
-def milestone_4(epochs=1, max_length=64, learning_rate=0.001):
+def milestone_4(
+    epochs=2,
+    max_length=64,
+    learning_rate=0.0005
+):
     result = milestone_3()
+
     model = result["model"]
     tokenizer = result["tokenizer"]
 
@@ -216,25 +235,22 @@ def milestone_4(epochs=1, max_length=64, learning_rate=0.001):
         if "lora_" in name
     }
 
-    adapter_path = os.path.join(
-        "artifacts",
-        "lora_adapter.pt"
-    )
+    torch.save(adapter_state, ADAPTER_PATH)
 
-    torch.save(adapter_state, adapter_path)
+    print(f"LoRA adapter saved to: {ADAPTER_PATH}")
 
     return {
         "model": model,
         "tokenizer": tokenizer,
         "losses": losses,
-        "adapter_path": adapter_path
+        "adapter_path": ADAPTER_PATH
     }
 
 
 def milestone_5(
     prompt="The striker",
     max_new_tokens=40,
-    adapter_path="artifacts/lora_adapter.pt"
+    adapter_path=ADAPTER_PATH
 ):
     if not os.path.exists(adapter_path):
         raise FileNotFoundError(
@@ -243,6 +259,7 @@ def milestone_5(
         )
 
     result = milestone_3()
+
     model = result["model"]
     tokenizer = result["tokenizer"]
 
@@ -267,7 +284,10 @@ def milestone_5(
     model.eval()
     model.config.use_cache = True
 
-    inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt"
+    )
 
     with torch.no_grad():
         output = model.generate(
@@ -277,6 +297,8 @@ def milestone_5(
             temperature=0.8,
             top_k=40,
             top_p=0.9,
+            repetition_penalty=1.2,
+            no_repeat_ngram_size=3,
             pad_token_id=tokenizer.eos_token_id
         )
 
@@ -288,13 +310,14 @@ def milestone_5(
 
 def milestone_6(start_gui=True):
     """
-    Create a desktop interface to compare N-gram and LoRA text.
+    Create a desktop interface to compare N-gram
+    and DistilGPT-2 LoRA generated text.
     """
 
     if not start_gui:
         return {
             "interface": "Tkinter",
-            "models": ["N-gram", "LoRA"],
+            "models": ["N-gram", "DistilGPT-2 LoRA"],
             "ready": True
         }
 
@@ -317,7 +340,7 @@ def milestone_6(start_gui=True):
 
     instruction = ttk.Label(
         window,
-        text="Enter a sports commentary prompt and compare both models."
+        text="Compare N-gram and DistilGPT-2 LoRA sports commentary."
     )
     instruction.pack(pady=5)
 
@@ -356,7 +379,7 @@ def milestone_6(start_gui=True):
 
     lora_frame = ttk.LabelFrame(
         output_frame,
-        text="Fine-tuned LoRA Model Output"
+        text="DistilGPT-2 LoRA Model Output"
     )
     lora_frame.pack(
         side="right",
@@ -407,7 +430,9 @@ def milestone_6(start_gui=True):
             )
             return
 
-        status_label.config(text="Generating text... Please wait.")
+        status_label.config(
+            text="Generating text... Please wait."
+        )
         window.update_idletasks()
 
         try:
@@ -430,11 +455,12 @@ def milestone_6(start_gui=True):
             lora_text.insert(tk.END, lora_result)
 
             status_label.config(
-                text="Generation complete. Compare the two outputs above."
+                text="Generation complete. Compare the outputs above."
             )
 
         except Exception as error:
             status_label.config(text="Generation failed.")
+
             messagebox.showerror(
                 "Generation error",
                 str(error)
