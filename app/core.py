@@ -1,4 +1,3 @@
-
 import re
 import random
 import os
@@ -9,9 +8,10 @@ import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# Upgraded pretrained model
+# Pretrained model configuration
 MODEL_NAME = "distilbert/distilgpt2"
 ADAPTER_PATH = "artifacts/distilgpt2_lora_adapter.pt"
+DEFAULT_SEED = 42
 
 
 SPORTS_CORPUS = [
@@ -38,6 +38,7 @@ SPORTS_CORPUS = [
 ]
 
 
+# MILESTONE 1: Prepare the sports commentary corpus
 def milestone_1():
     cleaned_corpus = []
 
@@ -52,6 +53,7 @@ def milestone_1():
     return cleaned_corpus
 
 
+# MILESTONE 2: N-gram language model
 class NGramModel:
     def __init__(self):
         self.transitions = defaultdict(Counter)
@@ -65,7 +67,9 @@ class NGramModel:
             for i in range(len(words) - 1):
                 self.transitions[words[i]][words[i + 1]] += 1
 
-    def generate(self, start_word, max_words=20):
+    def generate(self, start_word, max_words=20, seed=DEFAULT_SEED):
+        rng = random.Random(seed)
+
         current_word = start_word.lower()
         output = [current_word]
 
@@ -78,8 +82,10 @@ class NGramModel:
             words = list(next_words.keys())
             weights = list(next_words.values())
 
-            current_word = random.choices(
-                words, weights=weights, k=1
+            current_word = rng.choices(
+                words,
+                weights=weights,
+                k=1
             )[0]
 
             output.append(current_word)
@@ -93,6 +99,7 @@ def milestone_2():
     return model
 
 
+# MILESTONE 3: LoRA implementation
 class LoRAConv1D(nn.Module):
     def __init__(self, original_layer, rank=4, alpha=8, dropout=0.05):
         super().__init__()
@@ -158,6 +165,7 @@ def milestone_3(model_name=MODEL_NAME):
     }
 
 
+# MILESTONE 4: Fine-tune the LoRA adapter
 def milestone_4(
     epochs=2,
     max_length=64,
@@ -247,10 +255,12 @@ def milestone_4(
     }
 
 
+# MILESTONE 5: Generate text using the LoRA-adapted model
 def milestone_5(
     prompt="The striker",
     max_new_tokens=40,
-    adapter_path=ADAPTER_PATH
+    adapter_path=ADAPTER_PATH,
+    seed=DEFAULT_SEED
 ):
     if not os.path.exists(adapter_path):
         raise FileNotFoundError(
@@ -289,18 +299,23 @@ def milestone_5(
         return_tensors="pt"
     )
 
-    with torch.no_grad():
-        output = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.8,
-            top_k=40,
-            top_p=0.9,
-            repetition_penalty=1.2,
-            no_repeat_ngram_size=3,
-            pad_token_id=tokenizer.eos_token_id
-        )
+    # Use a fixed seed without changing the caller's global RNG state
+    with torch.random.fork_rng(devices=[]):
+        if seed is not None:
+            torch.manual_seed(seed)
+
+        with torch.no_grad():
+            output = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=0.8,
+                top_k=40,
+                top_p=0.9,
+                repetition_penalty=1.2,
+                no_repeat_ngram_size=3,
+                pad_token_id=tokenizer.eos_token_id
+            )
 
     return tokenizer.decode(
         output[0],
@@ -308,6 +323,7 @@ def milestone_5(
     )
 
 
+# MILESTONE 6: Graphical comparison interface
 def milestone_6(start_gui=True):
     """
     Create a desktop interface to compare N-gram
@@ -440,12 +456,14 @@ def milestone_6(start_gui=True):
 
             ngram_result = ngram_model.generate(
                 first_word,
-                max_words=25
+                max_words=25,
+                seed=DEFAULT_SEED
             )
 
             lora_result = milestone_5(
                 prompt=prompt,
-                max_new_tokens=40
+                max_new_tokens=40,
+                seed=DEFAULT_SEED
             )
 
             ngram_text.delete("1.0", tk.END)

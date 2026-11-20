@@ -5,6 +5,7 @@ import torch.nn as nn
 from app.core import (
     MODEL_NAME,
     ADAPTER_PATH,
+    DEFAULT_SEED,
     LoRAConv1D,
     NGramModel,
     milestone_1,
@@ -31,6 +32,19 @@ def test_milestone_2():
 
     assert isinstance(generated, str)
     assert generated.startswith("the")
+
+
+def test_ngram_generation_is_reproducible():
+    model = milestone_2()
+
+    first = model.generate("the", max_words=25, seed=42)
+    second = model.generate("the", max_words=25, seed=42)
+
+    assert first == second
+
+
+def test_default_seed_configuration():
+    assert DEFAULT_SEED == 42
 
 
 def test_milestone_3_configuration():

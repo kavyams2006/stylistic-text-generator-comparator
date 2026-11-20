@@ -53,7 +53,7 @@ This small corpus is intended for demonstrating the models and the fine-tuning w
 - Internet connection for the initial pretrained-model download
 - CPU or compatible hardware
 
-Dependencies and their versions are listed in `requirements.txt`.
+Dependencies and their pinned versions are listed in `requirements.txt`.
 
 ## Installation (Windows PowerShell)
 
@@ -118,6 +118,7 @@ The interface allows users to enter a prompt, generate text from both models, an
 One example generated during local testing is recorded in [`results/sample_outputs.md`](results/sample_outputs.md).
 
 The sample includes:
+
 - N-gram output.
 - DistilGPT-2 + LoRA output.
 
@@ -149,7 +150,7 @@ Run the test suite:
 pytest -v
 ```
 
-The project passed all 10 tests in the development environment at the time of testing.
+The project passed all 9 tests in the development environment at the time of testing.
 
 ## Project structure
 
@@ -157,23 +158,39 @@ The project passed all 10 tests in the development environment at the time of te
 stylistic-text-generator-comparator/
 ├── app/
 │   ├── core.py
-│   ├── cli.py
-│   ├── llm.py
-│   └── storage.py
+│   └── __init__.py
 ├── tests/
-│   ├── test_core.py
-│   └── test_smoke.py
+│   └── test_core.py
 ├── artifacts/
 │   └── distilgpt2_lora_adapter.pt
 ├── results/
-│   ├── sample_outputs.md
-│   └── evaluation.md
+│   ├── evaluation.md
+│   └── sample_outputs.md
 ├── screenshots/
+│   ├── model_comparison1.png
+│   └── model_comparison2.png
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── requirements.txt
+├── pytest.ini
 ├── README.md
-├── .env.example
 └── .gitignore
 ```
+
+## Development and testing
+
+The project includes automated tests for:
+
+- Sports-commentary corpus preparation.
+- N-gram model training and generation.
+- Reproducible N-gram generation using a fixed seed.
+- Pretrained model configuration.
+- LoRA adapter injection.
+- Adapter file configuration.
+- Graphical interface configuration.
+
+The test suite runs locally with `pytest -v` and automatically through GitHub Actions on pushes and pull requests.
 
 ## Security
 
@@ -193,3 +210,25 @@ stylistic-text-generator-comparator/
 ## Project development notes
 
 The project combines a manually prepared sports-commentary corpus, an implemented N-gram model, and a LoRA adaptation workflow. The README and results folder document the implementation and example outputs so the work can be inspected and reproduced.
+
+## Reproducibility
+
+Both text-generation models support a fixed random seed.
+
+- The default seed is `42`.
+- The N-gram model uses a local random number generator.
+- DistilGPT-2 + LoRA uses PyTorch's seeded random generator during sampling.
+- Repeating generation with the same prompt and seed produced identical outputs in local testing.
+
+For example:
+
+```python
+from app.core import milestone_2, milestone_5
+
+ngram = milestone_2()
+print(ngram.generate("the", seed=42))
+
+print(milestone_5("The striker", seed=42))
+```
+
+This improves reproducibility in the tested environment. Exact results across different hardware or software configurations are not guaranteed.
